@@ -132,8 +132,8 @@ func (mp *parent) handleSignal(s os.Signal) {
 	//while the child process is running, proxy
 	//all signals through
 	if mp.childCmd != nil && mp.childCmd.Process != nil {
-		if s != syscall.SIGURG {
-			mp.debugf("proxy signal (%s)", s)
+		if s.String() != "urgent I/O condition" {
+			mp.debugf("proxying signal (%s)", s)
 		}
 		mp.sendSignal(s)
 	} else
