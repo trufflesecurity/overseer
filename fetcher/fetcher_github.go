@@ -58,7 +58,7 @@ func (h *Github) Init() error {
 	if h.Interval == 0 {
 		h.Interval = 5 * time.Minute
 	} else if h.Interval < 1*time.Minute {
-		log.Printf("[overseer.github] warning: intervals less than 1 minute will surpass the public rate limit")
+		log.Printf("[updater.github] warning: intervals less than 1 minute will surpass the public rate limit")
 	}
 	return nil
 }

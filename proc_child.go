@@ -142,12 +142,12 @@ func (sp *child) triggerRestart() {
 
 func (sp *child) debugf(f string, args ...interface{}) {
 	if sp.Config.Debug {
-		log.Printf("[overseer child#"+sp.id+"] "+f, args...)
+		log.Printf("[updater child#"+sp.id+"] "+f, args...)
 	}
 }
 
 func (sp *child) warnf(f string, args ...interface{}) {
 	if sp.Config.Debug || !sp.Config.NoWarn {
-		log.Printf("[overseer child#"+sp.id+"] "+f, args...)
+		log.Printf("[updater child#"+sp.id+"] "+f, args...)
 	}
 }

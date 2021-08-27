@@ -142,7 +142,9 @@ func (mp *parent) handleSignal(s os.Signal) {
 		mp.debugf("interupt with no child")
 		os.Exit(1)
 	} else {
-		mp.debugf("signal discarded (%s), no child process", s)
+		if s.String() != "urgent I/O condition" {
+			mp.debugf("signal discarded (%s), no child process", s)
+		}
 	}
 }
 
