@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	envSlaveID        = "OVERSEER_SLAVE_ID"
-	envIsSlave        = "OVERSEER_IS_SLAVE"
+	envChildID        = "OVERSEER_SLAVE_ID"
+	envIsChild        = "OVERSEER_IS_SLAVE"
 	envNumFDs         = "OVERSEER_NUM_FDS"
 	envBinID          = "OVERSEER_BIN_ID"
 	envBinPath        = "OVERSEER_BIN_PATH"
@@ -47,9 +47,9 @@ type Config struct {
 	//PreUpgrade runs after a binary has been retrieved, user defined checks
 	//can be run here and returning an error will cancel the upgrade.
 	PreUpgrade func(tempBinaryPath string) error
-	//Debug enables all [overseer] logs.
+	//Debug enables all [updater] logs.
 	Debug bool
-	//NoWarn disables warning [overseer] logs.
+	//NoWarn disables warning [updater] logs.
 	NoWarn bool
 	//NoRestart disables all restarts, this option essentially converts
 	//the RestartSignal into a "ShutdownSignal".
@@ -99,9 +99,9 @@ func Run(c Config) {
 	err := runErr(&c)
 	if err != nil {
 		if c.Required {
-			log.Fatalf("[overseer] %s", err)
+			log.Fatalf("[updater] %s", err)
 		} else if c.Debug || !c.NoWarn {
-			log.Printf("[overseer] disabled. run failed: %s", err)
+			log.Printf("[updater] disabled. run failed: %s", err)
 		}
 		c.Program(DisabledState)
 		return
@@ -136,7 +136,7 @@ func SanityCheck() {
 	}
 }
 
-//abstraction over master/slave
+//abstraction over parent/child
 var currentProcess interface {
 	triggerRestart()
 	run() error
@@ -153,11 +153,11 @@ func runErr(c *Config) error {
 	if sanityCheck() {
 		return nil
 	}
-	//run either in master or slave mode
-	if os.Getenv(envIsSlave) == "1" {
-		currentProcess = &slave{Config: c}
+	//run either in parent or child mode
+	if os.Getenv(envIsChild) == "1" {
+		currentProcess = &child{Config: c}
 	} else {
-		currentProcess = &master{Config: c}
+		currentProcess = &parent{Config: c}
 	}
 	return currentProcess.run()
 }

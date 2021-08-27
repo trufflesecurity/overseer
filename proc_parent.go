@@ -22,12 +22,12 @@ import (
 
 var tmpBinPath = filepath.Join(os.TempDir(), "overseer-"+token()+extension())
 
-//a overseer master process
-type master struct {
+//a overseer parent process
+type parent struct {
 	*Config
-	slaveID             int
-	slaveCmd            *exec.Cmd
-	slaveExtraFiles     []*os.File
+	childID             int
+	childCmd            *exec.Cmd
+	childExtraFiles     []*os.File
 	binPath, tmpBinPath string
 	binPerms            os.FileMode
 	binHash             []byte
@@ -41,7 +41,7 @@ type master struct {
 	printCheckUpdate    bool
 }
 
-func (mp *master) run() error {
+func (mp *parent) run() error {
 	mp.debugf("run")
 	if err := mp.checkBinary(); err != nil {
 		return err
@@ -64,7 +64,7 @@ func (mp *master) run() error {
 	return mp.forkLoop()
 }
 
-func (mp *master) checkBinary() error {
+func (mp *parent) checkBinary() error {
 	//get path to binary and confirm its writable
 	binPath, err := os.Executable()
 	if err != nil {
@@ -100,11 +100,11 @@ func (mp *master) checkBinary() error {
 	return nil
 }
 
-func (mp *master) setupSignalling() {
+func (mp *parent) setupSignalling() {
 	//updater-forker comms
 	mp.restarted = make(chan bool)
 	mp.descriptorsReleased = make(chan bool)
-	//read all master process signals
+	//read all parent process signals
 	signals := make(chan os.Signal)
 	signal.Notify(signals)
 	go func() {
@@ -114,7 +114,7 @@ func (mp *master) setupSignalling() {
 	}()
 }
 
-func (mp *master) handleSignal(s os.Signal) {
+func (mp *parent) handleSignal(s os.Signal) {
 	if s == mp.RestartSignal {
 		//user initiated manual restart
 		go mp.triggerRestart()
@@ -122,39 +122,41 @@ func (mp *master) handleSignal(s os.Signal) {
 		// will occur on every restart, ignore it
 	} else
 	//**during a restart** a SIGUSR1 signals
-	//to the master process that, the file
+	//to the parent process that, the file
 	//descriptors have been released
 	if mp.awaitingUSR1 && s == SIGUSR1 {
 		mp.debugf("signaled, sockets ready")
 		mp.awaitingUSR1 = false
 		mp.descriptorsReleased <- true
 	} else
-	//while the slave process is running, proxy
+	//while the child process is running, proxy
 	//all signals through
-	if mp.slaveCmd != nil && mp.slaveCmd.Process != nil {
-		mp.debugf("proxy signal (%s)", s)
+	if mp.childCmd != nil && mp.childCmd.Process != nil {
+		if s != syscall.SIGURG {
+			mp.debugf("proxy signal (%s)", s)
+		}
 		mp.sendSignal(s)
 	} else
 	//otherwise if not running, kill on CTRL+c
 	if s == os.Interrupt {
-		mp.debugf("interupt with no slave")
+		mp.debugf("interupt with no child")
 		os.Exit(1)
 	} else {
-		mp.debugf("signal discarded (%s), no slave process", s)
+		mp.debugf("signal discarded (%s), no child process", s)
 	}
 }
 
-func (mp *master) sendSignal(s os.Signal) {
-	if mp.slaveCmd != nil && mp.slaveCmd.Process != nil {
-		if err := mp.slaveCmd.Process.Signal(s); err != nil {
-			mp.debugf("signal failed (%s), assuming slave process died unexpectedly", err)
+func (mp *parent) sendSignal(s os.Signal) {
+	if mp.childCmd != nil && mp.childCmd.Process != nil {
+		if err := mp.childCmd.Process.Signal(s); err != nil {
+			mp.debugf("signal failed (%s), assuming child process died unexpectedly", err)
 			os.Exit(1)
 		}
 	}
 }
 
-func (mp *master) retreiveFileDescriptors() error {
-	mp.slaveExtraFiles = make([]*os.File, len(mp.Config.Addresses))
+func (mp *parent) retreiveFileDescriptors() error {
+	mp.childExtraFiles = make([]*os.File, len(mp.Config.Addresses))
 	for i, addr := range mp.Config.Addresses {
 		a, err := net.ResolveTCPAddr("tcp", addr)
 		if err != nil {
@@ -171,13 +173,13 @@ func (mp *master) retreiveFileDescriptors() error {
 		if err := l.Close(); err != nil {
 			return fmt.Errorf("Failed to close listener for: %s (%s)", addr, err)
 		}
-		mp.slaveExtraFiles[i] = f
+		mp.childExtraFiles[i] = f
 	}
 	return nil
 }
 
 //fetchLoop is run in a goroutine
-func (mp *master) fetchLoop() {
+func (mp *parent) fetchLoop() {
 	min := mp.Config.MinFetchInterval
 	time.Sleep(min)
 	for {
@@ -194,7 +196,7 @@ func (mp *master) fetchLoop() {
 	}
 }
 
-func (mp *master) fetch() {
+func (mp *parent) fetch() {
 	if mp.restarting {
 		return //skip if restarting
 	}
@@ -307,12 +309,12 @@ func (mp *master) fetch() {
 	return
 }
 
-func (mp *master) triggerRestart() {
+func (mp *parent) triggerRestart() {
 	if mp.restarting {
 		mp.debugf("already graceful restarting")
 		return //skip
-	} else if mp.slaveCmd == nil || mp.restarting {
-		mp.debugf("no slave process")
+	} else if mp.childCmd == nil || mp.restarting {
+		mp.debugf("no child process")
 		return //skip
 	}
 	mp.debugf("graceful restart triggered")
@@ -332,7 +334,7 @@ func (mp *master) triggerRestart() {
 }
 
 //not a real fork
-func (mp *master) forkLoop() error {
+func (mp *parent) forkLoop() error {
 	//loop, restart command
 	for {
 		if err := mp.fork(); err != nil {
@@ -341,30 +343,30 @@ func (mp *master) forkLoop() error {
 	}
 }
 
-func (mp *master) fork() error {
+func (mp *parent) fork() error {
 	mp.debugf("starting %s", mp.binPath)
 	cmd := exec.Command(mp.binPath)
-	//mark this new process as the "active" slave process.
+	//mark this new process as the "active" child process.
 	//this process is assumed to be holding the socket files.
-	mp.slaveCmd = cmd
-	mp.slaveID++
-	//provide the slave process with some state
+	mp.childCmd = cmd
+	mp.childID++
+	//provide the child process with some state
 	e := os.Environ()
 	e = append(e, envBinID+"="+hex.EncodeToString(mp.binHash))
 	e = append(e, envBinPath+"="+mp.binPath)
-	e = append(e, envSlaveID+"="+strconv.Itoa(mp.slaveID))
-	e = append(e, envIsSlave+"=1")
-	e = append(e, envNumFDs+"="+strconv.Itoa(len(mp.slaveExtraFiles)))
+	e = append(e, envChildID+"="+strconv.Itoa(mp.childID))
+	e = append(e, envIsChild+"=1")
+	e = append(e, envNumFDs+"="+strconv.Itoa(len(mp.childExtraFiles)))
 	cmd.Env = e
-	//inherit master args/stdfiles
+	//inherit parent args/stdfiles
 	cmd.Args = os.Args
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	//include socket files
-	cmd.ExtraFiles = mp.slaveExtraFiles
+	cmd.ExtraFiles = mp.childExtraFiles
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("Failed to start slave process: %s", err)
+		return fmt.Errorf("Failed to start child process: %s", err)
 	}
 	//was scheduled to restart, notify success
 	if mp.restarting {
@@ -381,7 +383,7 @@ func (mp *master) fork() error {
 	select {
 	case err := <-cmdwait:
 		//program exited before releasing descriptors
-		//proxy exit code out to master
+		//proxy exit code out to parent
 		code := 0
 		if err != nil {
 			code = 1
@@ -410,15 +412,15 @@ func (mp *master) fork() error {
 	return nil
 }
 
-func (mp *master) debugf(f string, args ...interface{}) {
+func (mp *parent) debugf(f string, args ...interface{}) {
 	if mp.Config.Debug {
-		log.Printf("[overseer master] "+f, args...)
+		log.Printf("[updater parent] "+f, args...)
 	}
 }
 
-func (mp *master) warnf(f string, args ...interface{}) {
+func (mp *parent) warnf(f string, args ...interface{}) {
 	if mp.Config.Debug || !mp.Config.NoWarn {
-		log.Printf("[overseer master] "+f, args...)
+		log.Printf("[updater parent] "+f, args...)
 	}
 }
 
