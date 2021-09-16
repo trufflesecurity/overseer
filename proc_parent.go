@@ -27,6 +27,7 @@ type parent struct {
 	*Config
 	childID             int
 	childCmd            *exec.Cmd
+	childCmdMut         sync.Mutex
 	childExtraFiles     []*os.File
 	binPath, tmpBinPath string
 	binPerms            os.FileMode
@@ -115,6 +116,8 @@ func (mp *parent) setupSignalling() {
 }
 
 func (mp *parent) handleSignal(s os.Signal) {
+	mp.childCmdMut.Lock()
+	defer mp.childCmdMut.Unlock()
 	if s == mp.RestartSignal {
 		//user initiated manual restart
 		go mp.triggerRestart()
@@ -347,6 +350,8 @@ func (mp *parent) forkLoop() error {
 
 func (mp *parent) fork() error {
 	mp.debugf("starting %s", mp.binPath)
+	mp.childCmdMut.Lock()
+	defer mp.childCmdMut.Unlock()
 	cmd := exec.Command(mp.binPath)
 	//mark this new process as the "active" child process.
 	//this process is assumed to be holding the socket files.
