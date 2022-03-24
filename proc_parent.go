@@ -401,7 +401,7 @@ func (mp *parent) fork() error {
 			}
 		}
 		if code == -1 && runtime.GOOS == "linux" {
-			mp.debugf("child process was probably killed by OOMKiller, you likely need have more memory or adjust your configuration")
+			mp.debugf("child process was probably killed by OOMKiller, you likely need to have more memory or to adjust your configuration")
 		}
 		mp.debugf("prog exited with %d", code)
 		//if a restarts are disabled or if it was an
