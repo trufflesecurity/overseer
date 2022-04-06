@@ -396,6 +396,9 @@ func (mp *parent) fork() error {
 			mp.warnf("prog returned error: %s", err)
 			code = 1
 			if exiterr, ok := err.(*exec.ExitError); ok {
+				if len(exiterr.Stderr) > 0 {
+					mp.warnf("prog stderr: %s", string(exiterr.Stderr))
+				}
 				if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
 					code = status.ExitStatus()
 				}
