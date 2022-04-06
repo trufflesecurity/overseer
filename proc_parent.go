@@ -393,6 +393,7 @@ func (mp *parent) fork() error {
 		//proxy exit code out to parent
 		code := 0
 		if err != nil {
+			mp.warnf("prog returned error: %s", err)
 			code = 1
 			if exiterr, ok := err.(*exec.ExitError); ok {
 				if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
