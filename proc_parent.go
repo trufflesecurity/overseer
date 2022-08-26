@@ -23,7 +23,7 @@ import (
 
 var tmpBinPath = filepath.Join(os.TempDir(), "overseer-"+token()+extension())
 
-//a overseer parent process
+// a overseer parent process
 type parent struct {
 	*Config
 	childID             int
@@ -156,7 +156,9 @@ func (mp *parent) sendSignal(s os.Signal) {
 	if mp.childCmd != nil && mp.childCmd.Process != nil {
 		if err := mp.childCmd.Process.Signal(s); err != nil {
 			mp.debugf("signal failed (%s), assuming child process died unexpectedly", err)
-			os.Exit(1)
+			if !mp.Supervise {
+				os.Exit(1)
+			}
 		}
 	}
 }
@@ -184,7 +186,7 @@ func (mp *parent) retreiveFileDescriptors() error {
 	return nil
 }
 
-//fetchLoop is run in a goroutine
+// fetchLoop is run in a goroutine
 func (mp *parent) fetchLoop() {
 	min := mp.Config.MinFetchInterval
 	time.Sleep(min)
@@ -339,7 +341,7 @@ func (mp *parent) triggerRestart() {
 	}
 }
 
-//not a real fork
+// not a real fork
 func (mp *parent) forkLoop() error {
 	//loop, restart command
 	for {
@@ -352,7 +354,6 @@ func (mp *parent) forkLoop() error {
 func (mp *parent) fork() error {
 	mp.debugf("starting %s", mp.binPath)
 	mp.childCmdMut.Lock()
-	defer mp.childCmdMut.Unlock()
 	cmd := exec.Command(mp.binPath)
 	//mark this new process as the "active" child process.
 	//this process is assumed to be holding the socket files.
@@ -390,6 +391,7 @@ func (mp *parent) fork() error {
 	//wait....
 	select {
 	case err := <-cmdwait:
+		mp.childCmdMut.Unlock()
 		//program exited before releasing descriptors
 		//proxy exit code out to parent
 		code := 0
@@ -415,7 +417,10 @@ func (mp *parent) fork() error {
 		//unexpected crash, proxy this exit straight
 		//through to the main process
 		if mp.NoRestart || !mp.restarting {
-			os.Exit(code)
+			if !mp.Supervise {
+				os.Exit(code)
+			}
+			mp.fork()
 		}
 	case <-mp.descriptorsReleased:
 		//if descriptors are released, the program
