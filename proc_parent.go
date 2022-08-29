@@ -353,6 +353,8 @@ func (mp *parent) forkLoop() error {
 
 func (mp *parent) fork() error {
 	mp.debugf("starting %s", mp.binPath)
+	unlockOnce := sync.Once{}
+	defer unlockOnce.Do(mp.childCmdMut.Unlock)
 	mp.childCmdMut.Lock()
 	cmd := exec.Command(mp.binPath)
 	//mark this new process as the "active" child process.
@@ -391,7 +393,7 @@ func (mp *parent) fork() error {
 	//wait....
 	select {
 	case err := <-cmdwait:
-		mp.childCmdMut.Unlock()
+		unlockOnce.Do(mp.childCmdMut.Unlock)
 		//program exited before releasing descriptors
 		//proxy exit code out to parent
 		code := 0
