@@ -419,7 +419,7 @@ func (mp *parent) fork() error {
 		//unexpected crash, proxy this exit straight
 		//through to the main process
 		if mp.NoRestart || !mp.restarting {
-			if !mp.Supervise {
+			if !mp.Supervise || code == 0 {
 				os.Exit(code)
 			}
 			mp.fork()
