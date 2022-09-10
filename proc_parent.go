@@ -136,6 +136,9 @@ func (mp *parent) handleSignal(s os.Signal) {
 	//while the child process is running, proxy
 	//all signals through
 	if mp.childCmd != nil && mp.childCmd.Process != nil {
+		if s == os.Interrupt {
+			mp.Supervise = false
+		}
 		if s.String() != "urgent I/O condition" {
 			mp.debugf("proxying signal (%s)", s)
 		}
