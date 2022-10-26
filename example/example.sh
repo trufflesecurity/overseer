@@ -10,6 +10,8 @@ echo "BUILT APP (1)"
 echo "RUNNING APP"
 ./my_app &
 APPPID=$!
+trap "kill $APPPID" EXIT
+trap "rm my_app* 2> /dev/null" EXIT
 
 sleep 1
 curl localhost:5001
@@ -42,9 +44,6 @@ curl localhost:5001
 
 sleep 1
 
-#end demo - cleanup
-kill $APPPID
-rm my_app* 2> /dev/null
 
 # Expected output (hashes will vary across OS/arch/go-versions):
 # BUILT APP (1)
