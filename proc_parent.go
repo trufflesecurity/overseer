@@ -292,13 +292,13 @@ func (mp *parent) fetch() {
 			}
 		}
 	}()
-	tokenOut, err := cmd.CombinedOutput()
+	cmdOutput, err := cmd.CombinedOutput()
 	returned = true
 	if err != nil {
-		mp.warnf("failed to run temp binary: %s (%s) output \"%s\"", err, tmpBinPath, tokenOut)
+		mp.warnf("failed to run temp binary: %s (%s) output \"%s\"", err, tmpBinPath, cmdOutput)
 		return
 	}
-	if tokenIn != string(tokenOut) {
+	if !strings.Contains(string(cmdOutput), tokenIn) {
 		mp.warnf("sanity check failed")
 		return
 	}
