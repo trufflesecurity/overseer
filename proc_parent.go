@@ -155,7 +155,7 @@ func (mp *parent) handleSignal(s os.Signal) {
 func (mp *parent) sendSignal(s os.Signal) {
 	if mp.childCmd != nil && mp.childCmd.Process != nil {
 		if err := mp.childCmd.Process.Signal(s); err != nil {
-			mp.debugf("signal failed (%s), assuming child process died unexpectedly", err)
+			mp.debugf("signal (%s) failed (%s), assuming child process died unexpectedly", s, err)
 			if !mp.Supervise {
 				os.Exit(1)
 			}
