@@ -156,7 +156,9 @@ func (mp *parent) sendSignal(s os.Signal) {
 	if mp.childCmd != nil && mp.childCmd.Process != nil {
 		if err := mp.childCmd.Process.Signal(s); err != nil {
 			mp.debugf("signal (%s) failed (%s), assuming child process died unexpectedly", s, err)
-			if !mp.Supervise {
+			//if we receive a SIGURG during shutdown
+			//don't exit with an error code
+			if !mp.Supervise && s.String() != "urgent I/O condition" {
 				os.Exit(1)
 			}
 		}
