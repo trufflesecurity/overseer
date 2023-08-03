@@ -136,7 +136,7 @@ func (mp *parent) handleSignal(s os.Signal) {
 		if s == os.Interrupt {
 			mp.Supervise = false
 		}
-		if s.String() != "urgent I/O condition" {
+		if s != syscall.SIGURG {
 			mp.debugf("proxying signal (%s)", s)
 		}
 		mp.sendSignal(s)
@@ -146,7 +146,7 @@ func (mp *parent) handleSignal(s os.Signal) {
 		mp.debugf("interupt with no child")
 		os.Exit(1)
 	} else {
-		if s.String() != "urgent I/O condition" {
+		if s != syscall.SIGURG {
 			mp.debugf("signal discarded (%s), no child process", s)
 		}
 	}
@@ -156,7 +156,9 @@ func (mp *parent) sendSignal(s os.Signal) {
 	if mp.childCmd != nil && mp.childCmd.Process != nil {
 		if err := mp.childCmd.Process.Signal(s); err != nil {
 			mp.debugf("signal (%s) failed (%s), assuming child process died unexpectedly", s, err)
-			if !mp.Supervise {
+			//if we receive a SIGURG during shutdown
+			//don't exit with an error code
+			if !mp.Supervise && s != syscall.SIGURG {
 				os.Exit(1)
 			}
 		}
