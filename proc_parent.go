@@ -136,7 +136,9 @@ func (mp *parent) handleSignal(s os.Signal) {
 		if s == os.Interrupt {
 			mp.Supervise = false
 		}
-		if s != syscall.SIGURG {
+		//do a string comparison instead of using syscall.SIGURG
+		//because windows will fail to build otherwise
+		if s.String() != "urgent I/O condition" {
 			mp.debugf("proxying signal (%s)", s)
 		}
 		mp.sendSignal(s)
@@ -146,7 +148,9 @@ func (mp *parent) handleSignal(s os.Signal) {
 		mp.debugf("interupt with no child")
 		os.Exit(1)
 	} else {
-		if s != syscall.SIGURG {
+		//do a string comparison instead of using syscall.SIGURG
+		//because windows will fail to build otherwise
+		if s.String() != "urgent I/O condition" {
 			mp.debugf("signal discarded (%s), no child process", s)
 		}
 	}
@@ -158,7 +162,9 @@ func (mp *parent) sendSignal(s os.Signal) {
 			mp.debugf("signal (%s) failed (%s), assuming child process died unexpectedly", s, err)
 			//if we receive a SIGURG during shutdown
 			//don't exit with an error code
-			if !mp.Supervise && s != syscall.SIGURG {
+			//do a string comparison instead of using syscall.SIGURG
+			//because windows will fail to build otherwise
+			if !mp.Supervise && s.String() != "urgent I/O condition" {
 				os.Exit(1)
 			}
 		}
