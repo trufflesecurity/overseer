@@ -2,6 +2,7 @@ package overseer
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/hex"
@@ -19,9 +20,13 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/trufflesecurity/touchfile"
 )
 
 var tmpBinPath = filepath.Join(os.TempDir(), "overseer-"+token()+extension())
+
+const lockFileTimeout = 5 * time.Second
 
 // a overseer parent process
 type parent struct {
@@ -311,7 +316,7 @@ func (mp *parent) fetch() {
 		return
 	}
 	//overwrite!
-	if err := overwrite(mp.binPath, tmpBinPath); err != nil {
+	if err = mp.overwriteBinary(tmpBinPath); err != nil {
 		mp.warnf("failed to overwrite binary: %s", err)
 		return
 	}
@@ -465,4 +470,27 @@ func extension() string {
 	}
 
 	return ""
+}
+
+func (mp *parent) overwriteBinary(tmpBinPath string) error {
+	return mp.withFileLock(func() error {
+		return overwrite(mp.binPath, tmpBinPath)
+	})
+}
+
+func (mp *parent) withFileLock(fn func() error) error {
+	// Use the binary itself as a lock file to prevent other instances from
+	// trying to fetch updates at the same time.
+	touchFile, err := touchfile.NewTouchFile(mp.binPath)
+	if err != nil {
+		mp.warnf("failed to create touch file: %s", err)
+		return err
+	}
+
+	// Create a context with a short timeout to wait for the lock
+	ctx, cancel := context.WithTimeout(context.Background(), lockFileTimeout)
+	defer cancel()
+
+	// Acquire lock on the touch file
+	return touchFile.WithLock(ctx, touchfile.Exclusive, fn)
 }
