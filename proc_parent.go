@@ -316,7 +316,7 @@ func (mp *parent) fetch() {
 		return
 	}
 	//overwrite!
-	if err = mp.overwriteBinary(tmpBinPath); err != nil {
+	if err := mp.overwriteBinary(tmpBinPath); err != nil {
 		mp.warnf("failed to overwrite binary: %s", err)
 		return
 	}
