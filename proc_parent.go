@@ -7,7 +7,6 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"hash/fnv"
 	"io"
 	"log"
 	"net"
@@ -479,20 +478,11 @@ func (mp *parent) overwriteBinary(tmpBinPath string) error {
 	})
 }
 
-// Generates a file path in the same directory as the binary, using the hash of
-// the absolute binPath as the filename.
-func (mp *parent) touchFilePath() string {
-	hash := fnv.New64a()
-	hash.Write([]byte(mp.binPath))
-	touchFile := fmt.Sprintf("%x-updates.lock", hash.Sum64())
-	return filepath.Join(filepath.Dir(mp.binPath), touchFile)
-}
-
 func (mp *parent) withFileLock(fn func() error) error {
 	// Use a touch file based on the absolute binary path itself as a lock file
 	// to prevent other instances from trying to fetch updates at the same
 	// time.
-	touchFilePath := mp.touchFilePath()
+	touchFilePath := fmt.Sprintf("%x-updates.lock", mp.binPath)
 	touchFile, err := touchfile.NewTouchFile(touchFilePath)
 	if err != nil {
 		mp.warnf("failed to create touch file: %s", err)
