@@ -482,7 +482,7 @@ func (mp *parent) withFileLock(fn func() error) error {
 	// Use a touch file based on the absolute binary path itself as a lock file
 	// to prevent other instances from trying to fetch updates at the same
 	// time.
-	touchFilePath := fmt.Sprintf("%x-updates.lock", mp.binPath)
+	touchFilePath := fmt.Sprintf("%s-updates.lock", mp.binPath)
 	touchFile, err := touchfile.NewTouchFile(touchFilePath)
 	if err != nil {
 		mp.warnf("failed to create touch file: %s", err)
